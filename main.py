@@ -16,8 +16,6 @@ from model.Sobel_detection import *
 import cv2
 from model.backbone import MMER
 
-#IRSTD-1k best:MultiAreaNet-2025-05-12-18-30-14
-#NUDT-SIRST best:MultiAreaNet_max0.5-2025-05-25-10-51-20
 def Args():
     parser=ArgumentParser()
     
@@ -31,7 +29,7 @@ def Args():
     parser.add_argument('--crop-size',type=int,default=256)
     parser.add_argument('--base-size',type=int,default=256)
 
-    parser.add_argument('--weight-path',type=str,default='./weight/MultiAreaNet-2025-05-12-18-30-14/weight.pkl') #加载weight
+    parser.add_argument('--weight-path',type=str,default='./weight/MultiAreaNet_weight.pkl') 
     parser.add_argument('--if-checkpoint',type=bool,default=False)
     parser.add_argument('--mode',type=str,default='train')
     args=parser.parse_args()
@@ -43,9 +41,7 @@ class Trainer(object):
     def __init__(self,args):
         self.args=args
         self.mode=args.mode
-        #暂未设置warm_epoch
         self.lr=args.lr
-        #构建数据集
         trainSet=IRSTDDataSet(self.args,'train')
         testSet=IRSTDDataSet(self.args,'test')
 
@@ -56,7 +52,6 @@ class Trainer(object):
         self.device=torch.device('cuda')
        
         
-        #图像被处理为灰度图像 in_channel=1
         self.model=MMER(1)
         
         self.model.to(self.device)
@@ -65,7 +60,6 @@ class Trainer(object):
         self.edge_loss_1=nn.BCEWithLogitsLoss()
         
         self.down = nn.MaxPool2d(2, 2)
-        #评价标准
         self.PD_FA=PD_FA(1,10,self.args.base_size)
         self.mIOU=mIoU(1)
         self.ROC=ROCMetric(1,10)
@@ -93,7 +87,6 @@ class Trainer(object):
         self.model.train()
         process=tqdm(self.trainLoader)
         
-        #设置tag->warm_epoch是否结束
         tag=False
         edge_tag=False
         losses=AverageMeter()
@@ -107,7 +100,6 @@ class Trainer(object):
                 edge_tag=True
             masks,pred,edge_out=self.model(img,tag,edge_tag) 
             
-            #对每一个mask做sobel处理
             if edge_tag:  
                 edge_gt=[]
                 for m in range(label.size(0)):
@@ -165,20 +157,16 @@ class Trainer(object):
                 self.PD_FA.update(predicted,label)
                 self.ROC.update(predicted,label)
                 _, mean_IoU = self.mIOU.get()
-#                 #新增图片保存部分
                 pred_img=torch.sigmoid(predicted)
                 pred_img=pred_img.cpu().numpy()
                 for z in range(pred_img.shape[0]):
                     img_array=pred_img[z,0]
-                    # 归一化到0-255范围
                     img_array = (img_array - img_array.min()) / (img_array.max() - img_array.min() + 1e-8)
                     img_array = (img_array * 255).astype(np.uint8)
                     
-                    # 生成唯一文件名
                     filename = f"epoch{epoch}_batch{batch_idx}_img{z}.png"
                     my_save_path = os.path.join('./my_pics', filename)
                     
-                    # 保存图像
                     cv2.imwrite(my_save_path, img_array)
                 
                 
